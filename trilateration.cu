@@ -1,4 +1,5 @@
 #include <iostream>
+#include <random>
 #include <assert.h>
 #include <math.h>
 
@@ -30,11 +31,11 @@ void trilateration(size_t n, float ** disp, float ** ref, float ** outp) {
         pos[2] = sqrt(disp[0][j] - pow(pos[0], 2.0) - pow(pos[1], 2.0));
     }
     for (int s = 0; s < DIM; ++s) avg[s] += pos[s];
-    for (int t = 0; t < DIM; ++t) outp[t] = avg[t] / 4;
+    for (int t = 0; t < DIM; ++t) outp[t][i] = avg[t] / 4;
   }
 }
 
-float sqdisplacement(float ** p1, int lp1, float ** p2 int lp2) {
+float sqdisplacement(float ** p1, int lp1, float ** p2, int lp2) {
   float dist = 0.0;
   for (int i = 0; i < DIM; ++i)
     dist += pow((p1[lp1][i] - p2[lp2][i]), 2.0);
@@ -54,17 +55,17 @@ int main(int argc, char * argv[]) {
 
   // Create random number generator
   std::default_random_engine eng;
-  std::uniform_real_distrubtion<float> dist(0.0, STEP_MAX);
-  std::uniform_real_distrubtion<float> coords(-50.0, 50.0);
+  std::uniform_real_distribution<float> dist(0.0, STEP_MAX);
+  std::uniform_real_distribution<float> coords(-50.0, 50.0);
 
   // Set the error threshold
   const size_t error = 0.5;
   size_t N = 1 << 12;   // 2^12
   float **inp, **outp, **disp, **ref;
   inp   = (float **)new float*[DIM];
-  cudaMallocManaged(outp, DIM * sizeof(float*)); 
-  cudaMallocManaged(disp, FIX_PTS * sizeof(float*)); 
-  cudaMallocManaged(ref, DIM * sizeof(float*)); 
+  cudaMallocManaged(&outp, DIM * sizeof(float*)); 
+  cudaMallocManaged(&disp, FIX_PTS * sizeof(float*)); 
+  cudaMallocManaged(&ref, DIM * sizeof(float*)); 
 
   // Allocate space for input set and output averages
   for (int i = 0; i < DIM; ++i) {
