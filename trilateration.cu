@@ -18,19 +18,19 @@ void trilateration(size_t n, float ** disp, float ** ref, float ** outp) {
   // Get special coordinate values from reference points
   float d = ref[0][1], x =  ref[0][2], y = ref[1][2]; 
 
-  float pos[DIM] = { 0 };
   // Iterate over given set of output array
   for (int i = index; i < outc; i += stride) {
     float avg[DIM] = { 0 };
     // Iterate over corresponding input coords
     for (int j = 4 * index; j < 4 * (index + 1); ++j) {
+      float pos[DIM] = { 0 };
       pos[0] = ( disp[0][j] - disp[1][j] + pow(d, 2.0) ) /  (2 * d);  // Compute x-coordinate
       pos[1] = (( disp[0][j] - disp[2][j] + pow(x, 2.0) + pow(y, 2.0) )\
           /  (2 * y) )  - ( x * pos[0] / y);  // Compute y-coordinate
       if (DIM == 3)
         pos[2] = sqrt(disp[0][j] - pow(pos[0], 2.0) - pow(pos[1], 2.0));
+      for (int s = 0; s < DIM; ++s) avg[s] += pos[s];
     }
-    for (int s = 0; s < DIM; ++s) avg[s] += pos[s];
     for (int t = 0; t < DIM; ++t) outp[t][i] = avg[t] / 4;
   }
 }
