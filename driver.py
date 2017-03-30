@@ -17,7 +17,7 @@ configs = [(U,V), (2*U,V), (U,2*V), (2*U,2*V), (U/2,V), (U,V/2), (U,V/2), (U/2,V
 configs = [[n] + list(c) for n in NUM for c in configs]
 args = [prog + c for n in NUM for c in configs]
 
-results = [int(subprocess.check_output(arg)) for arg in args]
+results = [float(subprocess.check_output(arg)) for arg in args]
 
 plt.hist(results)
 plt.title('2D trilateration with different GPU configurations')
