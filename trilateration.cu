@@ -27,8 +27,9 @@ void trilateration(size_t n, float ** disp, float ** ref, float ** outp) {
       pos[0] = ( disp[0][j] - disp[1][j] + pow(d, 2.0) ) /  (2 * d);  // Compute x-coordinate
       pos[1] = (( disp[0][j] - disp[2][j] + pow(x, 2.0) + pow(y, 2.0) )\
           /  (2 * y) )  - ( x * pos[0] / y);  // Compute y-coordinate
-      if (DIM == 3)
-        pos[2] = sqrt(disp[0][j] - pow(pos[0], 2.0) - pow(pos[1], 2.0));
+#if DIM == 3
+      pos[2] = sqrt(disp[0][j] - pow(pos[0], 2.0) - pow(pos[1], 2.0));
+#endif
       for (int s = 0; s < DIM; ++s) avg[s] += pos[s];
     }
     for (int t = 0; t < DIM; ++t) outp[t][i] = avg[t] / 4;
@@ -78,17 +79,13 @@ int main(int argc, char * argv[]) {
   for (int i = 0; i < FIX_PTS; ++i)
     cudaMallocManaged(disp + i, N * sizeof(float));
 
-  // Generate the reference points
-  // Just setting fixed values for now
-  if (DIM == 3) { // All on the z = 0 plane
-    ref[0][0] = 0.0; ref[1][0] = 0.0; ref[2][0] = 0.0;    // Origin
-    ref[0][1] = 10.0; ref[1][0] = 0.0; ref[2][0] = 0.0;   // On x-axis
-    ref[0][0] = 10.0; ref[1][0] = 20.0; ref[2][0] = 0.0;  // Floating around
-  } else {
-    ref[0][0] = 0.0; ref[1][0] = 0.0;   // Origin
-    ref[0][1] = 10.0; ref[1][0] = 0.0;  // On x-axis
-    ref[0][0] = 10.0; ref[1][0] = 20.0; // Floating around
-  }
+  // Set the coordinates of the fixed points
+  ref[0][0] = 0.0; ref[0][1] = 10.0;  ref[0][2] = 10.0; 
+  ref[1][0] = 0.0; ref[1][1] = 0.0;   ref[1][2] = 20.0;
+#if DIM == 3
+  ref[2][0] = 0.0; ref[2][1] = 0.0;   ref[2][2] = 0.0;
+#endif
+
 
   // Generate the point sequence and compute displacements
   for (int i = 0; i < DIM; ++i) inp[0][i] = 0.0;
