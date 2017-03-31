@@ -53,6 +53,7 @@ int main(int argc, char * argv[]) {
   assert(argc == 4);
   // Check dimension
   assert(DIM > 1 && DIM < 4);
+  size_t size = atoi(argv[1]), blks = atoi(argv[2]), thrds = atoi(argv[3]);
 
   // Create random number generator
   std::default_random_engine eng;
@@ -61,7 +62,7 @@ int main(int argc, char * argv[]) {
 
   // Set the error threshold
   const size_t error = 0.5;
-  size_t N = 1 << 12;   // 2^12
+  size_t N = 1 << size;   // 2^12
   float **inp, **outp, **disp, **ref;
   inp   = (float **)new float*[DIM];
   cudaMallocManaged(&outp, DIM * sizeof(float*)); 
@@ -98,7 +99,7 @@ int main(int argc, char * argv[]) {
 
   // Run the trilateration
   // TODO adapt this call to CL args
-  trilateration<<<1,1>>>(N, disp, ref, outp);
+  trilateration<<<blks, thrds>>>(N, disp, ref, outp);
 
   // Wait for the GPU to finish
   cudaDeviceSynchronize();
