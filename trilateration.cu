@@ -8,7 +8,8 @@
 #endif
 
 #define FIX_PTS 3
-#define STEP_MAX 0.1 
+#define STEP_MAX 0.5
+#define STEP_MIN -0.5
 
 __global__
 void trilateration(size_t n, float ** disp, float ** ref, float ** outp) {
@@ -22,25 +23,32 @@ void trilateration(size_t n, float ** disp, float ** ref, float ** outp) {
   for (int i = index; i < outc; i += stride) {
     float avg[DIM] = { 0 };
     // Iterate over corresponding input coords
-    for (int j = 4 * index; j < 4 * (index + 1); ++j) {
+    for (int j = 4 * i; j < (4 * (i + 1)); ++j) {
       float pos[DIM] = { 0 };
       pos[0] = ( disp[0][j] - disp[1][j] + pow(d, 2.0) ) /  (2 * d);  // Compute x-coordinate
       pos[1] = (( disp[0][j] - disp[2][j] + pow(x, 2.0) + pow(y, 2.0) )\
           /  (2 * y) )  - ( x * pos[0] / y);  // Compute y-coordinate
 #if DIM == 3
-      pos[2] = sqrt(disp[0][j] - pow(pos[0], 2.0) - pow(pos[1], 2.0));
+      pos[2] = sqrt(abs(disp[0][j] - pow(pos[0], 2.0) - pow(pos[1], 2.0)));
 #endif
       for (int s = 0; s < DIM; ++s) avg[s] += pos[s];
     }
-    for (int t = 0; t < DIM; ++t) outp[t][i] = avg[t] / 4;
+    for (int t = 0; t < DIM; ++t) outp[t][i] = (avg[t] / 4.0);
   }
 }
 
 float sqdisplacement(float ** p1, int lp1, float ** p2, int lp2) {
   float dist = 0.0;
   for (int i = 0; i < DIM; ++i)
-    dist += pow((p1[lp1][i] - p2[lp2][i]), 2.0);
+    dist += pow((p1[i][lp1] - p2[i][lp2]), 2.0);
   return dist;
+}
+
+float d_check(float *p, float ** p2, int ip2) {
+  float dist = 0.0;
+  for (int i = 0; i < DIM; ++i)
+    dist += pow((p[i] - p2[i][ip2]), 2.0);
+  return sqrt(dist);
 }
 
 // Requires:
@@ -56,14 +64,15 @@ int main(int argc, char * argv[]) {
   size_t size = atoi(argv[1]), blks = atoi(argv[2]), thrds = atoi(argv[3]);
 
   // Create random number generator
-  std::default_random_engine eng;
-  std::uniform_real_distribution<float> dist(0.0, STEP_MAX);
-  std::uniform_real_distribution<float> coords(-50.0, 50.0);
+  std::default_random_engine eng; eng.seed(1);
+  std::uniform_real_distribution<float> dist(STEP_MIN, STEP_MAX);
 
   // Set the error threshold
   const size_t error = 0.5;
-  size_t N = 1 << size;   // 2^12
+  size_t N = 1 << size;   // 2^size
   float **inp, **outp, **disp, **ref;
+
+  // Start allocating space
   inp   = (float **)new float*[DIM];
   cudaMallocManaged(&outp, DIM * sizeof(float*)); 
   cudaMallocManaged(&disp, FIX_PTS * sizeof(float*)); 
@@ -81,35 +90,59 @@ int main(int argc, char * argv[]) {
     cudaMallocManaged(disp + i, N * sizeof(float));
 
   // Set the coordinates of the fixed points
-  ref[0][0] = 0.0; ref[0][1] = 10.0;  ref[0][2] = 10.0; 
-  ref[1][0] = 0.0; ref[1][1] = 0.0;   ref[1][2] = 20.0;
+  ref[0][0] = 0.0; ref[0][1] = 100.0;  ref[0][2] = 150.0; 
+  ref[1][0] = 0.0; ref[1][1] = 0.0;   ref[1][2] = 200.0;
 #if DIM == 3
   ref[2][0] = 0.0; ref[2][1] = 0.0;   ref[2][2] = 0.0;
 #endif
 
 
   // Generate the point sequence and compute displacements
-  for (int i = 0; i < DIM; ++i) inp[0][i] = 0.0;
+  for (int i = 0; i < DIM; ++i) inp[i][0] = 50.0;
+  for (int i = 0; i < FIX_PTS; ++i)
+    disp[i][0] = sqdisplacement(inp, 0, ref, i);
   for (int i = 1; i < N; ++i) {
     for (int d = 0; d < DIM; ++d)
-      inp[i][d] = inp[i-1][d] + dist(eng);
+      inp[d][i] = inp[d][i-1] + dist(eng);
     for (int p = 0; p < FIX_PTS; ++p)
-      disp[i][p] = sqdisplacement(inp, i, ref, p);
+      disp[p][i] = sqdisplacement(inp, i, ref, p);
   }
 
   // Run the trilateration
-  // TODO adapt this call to CL args
   trilateration<<<blks, thrds>>>(N, disp, ref, outp);
 
   // Wait for the GPU to finish
   cudaDeviceSynchronize();
 
-  // TODO Do something here with the results
   // Like check how they stack up
   for (int i = 0; i < N / 4; ++i) {
-    size_t pos = i * 4;
-    assert(sqdisplacement(inp, i, outp, pos) < error);
+    float avg[DIM] = { 0 };
+    for (int j = 4 * i; j < 4 * (i + 1); ++j) {
+      for (int d = 0; d < DIM; ++d)
+        avg[d] += inp[d][j];
+    }
+    for (int d = 0; d < DIM; ++d) avg[d] /= 4;
+    float err = d_check(avg, outp, i); 
+    std::cout << "Error at " << 4 * i << " is " << err << std::endl;
   }
+
+#ifdef RSEL_DEBUG
+  std::cout << "Original point set." << std::endl;
+  for (int i = 0; i < N; ++i) {
+    std::cout << i << ": ";
+    for (int d = 0; d < DIM; ++d)
+      std::cout << inp[d][i] << " ";
+    std::cout << std::endl;
+  }
+
+  std::cout << "Trilateration set." << std::endl;
+  for (int i = 0; i < N / 4; ++i) {
+    std::cout << 4 * i << ": ";
+    for (int d = 0; d < DIM; ++d)
+      std::cout << outp[d][i] << " ";
+    std::cout << std::endl;
+  }
+#endif
 
   // Free the memory
   for (int i = 0; i < DIM; ++i) {
