@@ -1,5 +1,8 @@
 #include <iostream>
+#include <fstream>
+#include <string>
 #include <random>
+#include <iomanip>
 #include <assert.h>
 #include <math.h>
 
@@ -67,8 +70,6 @@ int main(int argc, char * argv[]) {
   std::default_random_engine eng; eng.seed(1);
   std::uniform_real_distribution<float> dist(STEP_MIN, STEP_MAX);
 
-  // Set the error threshold
-  const size_t error = 0.5;
   size_t N = 1 << size;   // 2^size
   float **inp, **outp, **disp, **ref;
 
@@ -114,35 +115,28 @@ int main(int argc, char * argv[]) {
   // Wait for the GPU to finish
   cudaDeviceSynchronize();
 
-  // Like check how they stack up
-  for (int i = 0; i < N / 4; ++i) {
-    float avg[DIM] = { 0 };
-    for (int j = 4 * i; j < 4 * (i + 1); ++j) {
-      for (int d = 0; d < DIM; ++d)
-        avg[d] += inp[d][j];
-    }
-    for (int d = 0; d < DIM; ++d) avg[d] /= 4;
-    float err = d_check(avg, outp, i); 
-    std::cout << "Error at " << 4 * i << " is " << err << std::endl;
-  }
-
-#ifdef RSEL_DEBUG
-  std::cout << "Original point set." << std::endl;
-  for (int i = 0; i < N; ++i) {
-    std::cout << i << ": ";
-    for (int d = 0; d < DIM; ++d)
-      std::cout << inp[d][i] << " ";
-    std::cout << std::endl;
-  }
-
-  std::cout << "Trilateration set." << std::endl;
-  for (int i = 0; i < N / 4; ++i) {
-    std::cout << 4 * i << ": ";
-    for (int d = 0; d < DIM; ++d)
-      std::cout << outp[d][i] << " ";
-    std::cout << std::endl;
-  }
+  // Output the point set and trilateration set to a file
+  std::ofstream outFile;
+#if DIM == 3
+  outFile.open("output/3dresults-" + std::to_string(size) + "-" +\
+      std::to_string(blks) + "-" + std::to_string(thrds) + ".txt");
+#else
+  outFile.open("output/2dresults-" + std::to_string(size) + "-" +\
+      std::to_string(blks) + "-" + std::to_string(thrds) + ".txt");
 #endif
+  outFile << std::setw(10 * DIM + (DIM - 1)) << "Input point" << " | Trilateration Result" << std::endl;
+  for (int i = 0; i < N; ++i) {
+    for (int d = 0; d < DIM; ++d)
+      outFile << std::setw(10) << inp[d][i] << " ";
+    outFile << "| ";
+    if ( ! (i % 4) ) { // Also print out the trilateration value
+      for (int d = 0; d < DIM; ++d)
+        outFile << std::setw(10) << outp[d][i / 4] << " ";
+    }
+    outFile << std::endl;
+  }
+
+  outFile.close();
 
   // Free the memory
   for (int i = 0; i < DIM; ++i) {

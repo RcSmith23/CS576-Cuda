@@ -1,0 +1,27 @@
+Ryan Smith    rsmith23@binghamton.edu
+Erik Langert  elanger4@binghamton.edu
+
+Ran this on a Linux system with a GeForce GTX 760 GPU.
+
+Program compiles and runs correctly for both 3D and 2D.
+
+Usage:
+
+The Makfile will create two executables: 3dtri and 2dtri. They are
+both used the same:
+  ./3dtri <exponent-for-data-set-size> <num-blks> <num-threads>
+
+If you want to have 2^14 input points, using 6 blocks, and 192 threads
+per block, then:
+
+  ./3dtri 14 6 192
+
+When you run the program, it will geenrate a txt file in ./output/, the
+file will list the input points and the corresponding trilateration
+points. The file will have a name corresponding to the run and the
+paramters.
+
+To run all combinations for both 2d and 3d, you need to have python3 
+installed. The file driver.py will run all combinations, producing
+two images: results-3d.png and results-2d.png. It will also create
+all of the text files showing the data in the ./output/ dir. 
